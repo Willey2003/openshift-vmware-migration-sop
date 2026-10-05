@@ -2710,35 +2710,106 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb47-1"><a href=
 <td>23 min 26 s</td>
 </tr>
 <tr>
-<td>DiskTransferV2v</td>
+<td>DiskTransferV2v (10240 MB)</td>
 <td>15:31:47</td>
-<td>running at time of writing (1740 of 10240 MB at 15:36)</td>
-<td></td>
+<td>16:32:29</td>
+<td>60 min 42 s</td>
 </tr>
 <tr>
 <td>VirtualMachineCreation</td>
-<td></td>
-<td></td>
-<td></td>
+<td>16:32:29</td>
+<td>16:32:30</td>
+<td>1 s</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>15:08:05</strong></td>
+<td><strong>16:32:30</strong></td>
+<td><strong>1 h 24 min 25 s</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>The final state, captured as the plan finished:</p>
+<pre class="console"><code>$ oc get plan test-ubuntu -n openshift-mtv
+NAME          READY   EXECUTING   SUCCEEDED   FAILED   AGE
+test-ubuntu   True                True                 124m
+
+$ oc get migration -n openshift-mtv
+NAME            READY   RUNNING   SUCCEEDED   FAILED   AGE
+test-ubuntu-1   True              True                 123m
+
+$ oc get plan test-ubuntu -n openshift-mtv -o jsonpath=&#39;{range .status.conditions[*]}{.type}{&quot;\t&quot;}{.status}{&quot;\t&quot;}{.message}{&quot;\n&quot;}{end}&#39;
+Ready      True   The migration plan is ready.
+Succeeded  True   The plan execution has SUCCEEDED.
+
+$ oc get vm,pvc -n mtv-test
+NAME                                                     AGE   STATUS    READY
+virtualmachine.kubevirt.io/ubuntu-noble-24.04-cloudimg   39m   Stopped   False
+
+NAME                                              STATUS   VOLUME                                     CAPACITY      ACCESS MODES   STORAGECLASS
+persistentvolumeclaim/test-ubuntu-vm-2275-dm9s9   Bound    pvc-e18f93ca-a91e-46e9-9306-2bda130b4efd   11381663335   RWX            nfs-csi</code></pre>
+<p>What MTV built from the vSphere VM (fields from
+<code>oc get vm ubuntu-noble-24.04-cloudimg -n mtv-test -o yaml</code>):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Comes from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runStrategy</code></td>
+<td><code>Halted</code></td>
+<td><code>targetPowerState: auto</code> matches the source, which was
+powered off</td>
+</tr>
+<tr>
+<td><code>cpu</code></td>
+<td>2 sockets x 1 core</td>
+<td>Source vCPU layout</td>
+</tr>
+<tr>
+<td><code>memory.guest</code></td>
+<td><code>1Gi</code></td>
+<td>Source RAM</td>
+</tr>
+<tr>
+<td><code>firmware</code></td>
+<td>BIOS</td>
+<td>Source firmware</td>
+</tr>
+<tr>
+<td><code>networks</code></td>
+<td><code>multus: default/vlan-110</code></td>
+<td>NetworkMap</td>
+</tr>
+<tr>
+<td><code>volumes</code></td>
+<td>PVC <code>test-ubuntu-vm-2275-dm9s9</code></td>
+<td>StorageMap (<code>nfs-csi</code>); the PVC is slightly larger than
+10 GiB to leave room for filesystem overhead</td>
 </tr>
 </tbody>
 </table></div>
 <p><strong>Lesson recorded:</strong> without VDDK, virt-v2v reads the
-source disk over HTTPS through vCenter (<code>nbdkit curl</code>). For
-10 GiB that is acceptable in a lab; for production disk sizes it is not.
-Section 12 is mandatory for production.</p>
+source disk over HTTPS through vCenter (<code>nbdkit curl</code>). Here
+that came to about 2.8 MB/s: one hour to copy 10 GiB, plus 23 minutes of
+conversion. At that rate a 500 GiB production disk would take more than
+two days, so section 12 (VDDK) is mandatory for production.</p>
 <h3 id="163-after-it-finishes">16.3 After it finishes</h3>
-<div class="sourceCode" id="cb48"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="ex">~/ocp-install/mtv-test/add-cloudinit-login.sh</span>     <span class="co"># the cloud image has no password; adds a cloud-init login</span></span></code></pre></div>
+<div class="sourceCode" id="cb49"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="ex">~/ocp-install/mtv-test/add-cloudinit-login.sh</span>     <span class="co"># the cloud image has no password; adds a cloud-init login</span></span></code></pre></div>
 <p>Then <strong>Virtualization &gt; VirtualMachines &gt;
 mtv-test</strong>, start the VM, open <strong>Console</strong>, log in
 as <code>ubuntu</code>, run <code>ip a</code> and confirm the NIC is on
 VLAN 110. Follow section 15.5 for the full validation, and section 15.6
 to clean up.</p>
-<div class="sourceCode" id="cb49"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># clean up when done</span></span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete project mtv-test</span>
-<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete plan/test-ubuntu <span class="at">-n</span> openshift-mtv     <span class="co"># keep the maps for the next VM</span></span></code></pre></div>
+<div class="sourceCode" id="cb50"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># clean up when done</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete project mtv-test</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> delete plan/test-ubuntu <span class="at">-n</span> openshift-mtv     <span class="co"># keep the maps for the next VM</span></span></code></pre></div>
 <h1 id="part-d-production">Part D: Production</h1>
 <h2 id="17-production-storage-fc-iscsi-and-nfs">17. Production storage:
 FC, iSCSI and NFS</h2>
@@ -2848,37 +2919,37 @@ drivers do this for you), and <strong>multipath</strong> so that losing
 one fabric does not lose the disk.</p>
 <p><strong>Step 1: collect WWPNs from every worker</strong> (give them
 to the SAN team for zoning):</p>
-<div class="sourceCode" id="cb50"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> n <span class="kw">in</span> <span class="va">$(</span><span class="ex">oc</span> get nodes <span class="at">-l</span> node-role.kubernetes.io/worker <span class="at">-o</span> name<span class="va">)</span><span class="kw">;</span> <span class="cf">do</span></span>
-<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">&quot;== </span><span class="va">$n</span><span class="st">&quot;</span><span class="kw">;</span> <span class="ex">oc</span> debug <span class="va">$n</span> <span class="at">-q</span> <span class="at">--</span> chroot /host sh <span class="at">-c</span> <span class="st">&#39;cat /sys/class/fc_host/host*/port_name&#39;</span></span>
-<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a><span class="cf">done</span></span></code></pre></div>
+<div class="sourceCode" id="cb51"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> n <span class="kw">in</span> <span class="va">$(</span><span class="ex">oc</span> get nodes <span class="at">-l</span> node-role.kubernetes.io/worker <span class="at">-o</span> name<span class="va">)</span><span class="kw">;</span> <span class="cf">do</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">&quot;== </span><span class="va">$n</span><span class="st">&quot;</span><span class="kw">;</span> <span class="ex">oc</span> debug <span class="va">$n</span> <span class="at">-q</span> <span class="at">--</span> chroot /host sh <span class="at">-c</span> <span class="st">&#39;cat /sys/class/fc_host/host*/port_name&#39;</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a><span class="cf">done</span></span></code></pre></div>
 <p><strong>Step 2: enable multipath with a MachineConfig</strong> (the
 only supported way to change node OS files on RHCOS). Use the multipath
 settings your array vendor publishes for RHEL 9:</p>
-<div class="sourceCode" id="cb51"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> machineconfiguration.openshift.io/v1</span></span>
-<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> MachineConfig</span></span>
-<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
-<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> 99-worker-multipath</span></span>
-<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">labels</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">machineconfiguration.openshift.io/role</span><span class="kw">:</span><span class="at"> worker</span><span class="kw">}</span></span>
-<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
-<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">config</span><span class="kw">:</span></span>
-<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">ignition</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="fl">3.4.0</span><span class="kw">}</span></span>
-<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">storage</span><span class="kw">:</span></span>
-<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">files</span><span class="kw">:</span></span>
-<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /etc/multipath.conf</span></span>
-<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">mode</span><span class="kw">:</span><span class="at"> </span><span class="dv">0644</span></span>
-<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">overwrite</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">contents</span><span class="kw">:</span></span>
-<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">source</span><span class="kw">:</span><span class="at"> data:text/plain;charset=utf-8;base64,&lt;BASE64_OF_VENDOR_MULTIPATH_CONF&gt;</span></span>
-<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">systemd</span><span class="kw">:</span></span>
-<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">units</span><span class="kw">:</span></span>
-<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> multipathd.service</span></span>
-<span id="cb51-19"><a href="#cb51-19" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
 <div class="sourceCode" id="cb52"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="fu">base64</span> <span class="at">-w0</span> multipath.conf          <span class="co"># paste the result into the source line above</span></span>
-<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> apply <span class="at">-f</span> 99-worker-multipath.yaml</span>
-<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get mcp worker <span class="at">-w</span>               <span class="co"># nodes reboot one at a time; wait for UPDATED True</span></span></code></pre></div>
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> machineconfiguration.openshift.io/v1</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> MachineConfig</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> 99-worker-multipath</span></span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">labels</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">machineconfiguration.openshift.io/role</span><span class="kw">:</span><span class="at"> worker</span><span class="kw">}</span></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">config</span><span class="kw">:</span></span>
+<span id="cb52-8"><a href="#cb52-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">ignition</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="fl">3.4.0</span><span class="kw">}</span></span>
+<span id="cb52-9"><a href="#cb52-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">storage</span><span class="kw">:</span></span>
+<span id="cb52-10"><a href="#cb52-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">files</span><span class="kw">:</span></span>
+<span id="cb52-11"><a href="#cb52-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /etc/multipath.conf</span></span>
+<span id="cb52-12"><a href="#cb52-12" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">mode</span><span class="kw">:</span><span class="at"> </span><span class="dv">0644</span></span>
+<span id="cb52-13"><a href="#cb52-13" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">overwrite</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb52-14"><a href="#cb52-14" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">contents</span><span class="kw">:</span></span>
+<span id="cb52-15"><a href="#cb52-15" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">source</span><span class="kw">:</span><span class="at"> data:text/plain;charset=utf-8;base64,&lt;BASE64_OF_VENDOR_MULTIPATH_CONF&gt;</span></span>
+<span id="cb52-16"><a href="#cb52-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">systemd</span><span class="kw">:</span></span>
+<span id="cb52-17"><a href="#cb52-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">units</span><span class="kw">:</span></span>
+<span id="cb52-18"><a href="#cb52-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> multipathd.service</span></span>
+<span id="cb52-19"><a href="#cb52-19" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
+<div class="sourceCode" id="cb53"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">base64</span> <span class="at">-w0</span> multipath.conf          <span class="co"># paste the result into the source line above</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> apply <span class="at">-f</span> 99-worker-multipath.yaml</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get mcp worker <span class="at">-w</span>               <span class="co"># nodes reboot one at a time; wait for UPDATED True</span></span></code></pre></div>
 <blockquote>
 <p><strong>Why this reboots nodes:</strong> MachineConfig changes are
 applied by the Machine Config Operator, which drains and reboots each
@@ -2890,26 +2961,26 @@ Software Catalog (most are certified operators) and create its
 backend/secret as the vendor documents.</p>
 <p><strong>Step 4: StorageClass.</strong> Example for NetApp Trident on
 FC (replace with your vendor's provisioner and parameters):</p>
-<div class="sourceCode" id="cb53"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
-<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
-<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
-<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> fc-gold</span></span>
-<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">annotations</span><span class="kw">:</span></span>
-<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">storageclass.kubevirt.io/is-default-virt-class</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;true&quot;</span><span class="co">   # default class for VM disks</span></span>
-<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
-<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
-<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-san</span></span>
-<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">sanType</span><span class="kw">:</span><span class="at"> fcp</span></span>
-<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">fsType</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;&quot;</span><span class="co">                       # raw block for VM disks</span></span>
-<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
-<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
-<p><strong>Verify:</strong></p>
 <div class="sourceCode" id="cb54"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get storageprofile fc-gold <span class="at">-o</span> jsonpath=<span class="st">&#39;{.status.claimPropertySets}{&quot;\n&quot;}&#39;</span></span>
-<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="co"># expect: [{&quot;accessModes&quot;:[&quot;ReadWriteMany&quot;],&quot;volumeMode&quot;:&quot;Block&quot;}]</span></span>
-<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> debug node/<span class="op">&lt;</span>worker<span class="op">&gt;</span> -q <span class="at">--</span> chroot /host multipath <span class="at">-ll</span>     <span class="co"># each LUN shows 2+ active paths</span></span></code></pre></div>
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> fc-gold</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">annotations</span><span class="kw">:</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">storageclass.kubevirt.io/is-default-virt-class</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;true&quot;</span><span class="co">   # default class for VM disks</span></span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
+<span id="cb54-8"><a href="#cb54-8" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
+<span id="cb54-9"><a href="#cb54-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-san</span></span>
+<span id="cb54-10"><a href="#cb54-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">sanType</span><span class="kw">:</span><span class="at"> fcp</span></span>
+<span id="cb54-11"><a href="#cb54-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">fsType</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;&quot;</span><span class="co">                       # raw block for VM disks</span></span>
+<span id="cb54-12"><a href="#cb54-12" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb54-13"><a href="#cb54-13" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
+<span id="cb54-14"><a href="#cb54-14" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
+<p><strong>Verify:</strong></p>
+<div class="sourceCode" id="cb55"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> get storageprofile fc-gold <span class="at">-o</span> jsonpath=<span class="st">&#39;{.status.claimPropertySets}{&quot;\n&quot;}&#39;</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="co"># expect: [{&quot;accessModes&quot;:[&quot;ReadWriteMany&quot;],&quot;volumeMode&quot;:&quot;Block&quot;}]</span></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> debug node/<span class="op">&lt;</span>worker<span class="op">&gt;</span> -q <span class="at">--</span> chroot /host multipath <span class="at">-ll</span>     <span class="co"># each LUN shows 2+ active paths</span></span></code></pre></div>
 <h3 id="173-iscsi-node-preparation-and-storageclass">17.3 iSCSI: node
 preparation and StorageClass</h3>
 <p><strong>Concept.</strong> Each node is an iSCSI initiator with a
@@ -2920,10 +2991,10 @@ end and multipath on top.</p>
 service.</strong> RHCOS generates a unique
 <code>/etc/iscsi/initiatorname.iscsi</code> per node. Collect them for
 the array host group if your driver does not register them itself:</p>
-<div class="sourceCode" id="cb55"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> n <span class="kw">in</span> <span class="va">$(</span><span class="ex">oc</span> get nodes <span class="at">-l</span> node-role.kubernetes.io/worker <span class="at">-o</span> name<span class="va">)</span><span class="kw">;</span> <span class="cf">do</span></span>
-<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">&quot;== </span><span class="va">$n</span><span class="st">&quot;</span><span class="kw">;</span> <span class="ex">oc</span> debug <span class="va">$n</span> <span class="at">-q</span> <span class="at">--</span> chroot /host cat /etc/iscsi/initiatorname.iscsi</span>
-<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a><span class="cf">done</span></span></code></pre></div>
+<div class="sourceCode" id="cb56"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> n <span class="kw">in</span> <span class="va">$(</span><span class="ex">oc</span> get nodes <span class="at">-l</span> node-role.kubernetes.io/worker <span class="at">-o</span> name<span class="va">)</span><span class="kw">;</span> <span class="cf">do</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>  <span class="bu">echo</span> <span class="st">&quot;== </span><span class="va">$n</span><span class="st">&quot;</span><span class="kw">;</span> <span class="ex">oc</span> debug <span class="va">$n</span> <span class="at">-q</span> <span class="at">--</span> chroot /host cat /etc/iscsi/initiatorname.iscsi</span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a><span class="cf">done</span></span></code></pre></div>
 <p>Enable <code>iscsid</code> and <code>multipathd</code> with a
 MachineConfig (same pattern as 17.2, adding a unit
 <code>iscsid.service</code> with <code>enabled: true</code>).</p>
@@ -2931,43 +3002,43 @@ MachineConfig (same pattern as 17.2, adding a unit
 storage VLANs on a bond, each with a node IP and MTU 9000. One policy
 per node because the IPs differ (or use a nodeSelector per
 hostname):</p>
-<div class="sourceCode" id="cb56"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> nmstate.io/v1</span></span>
-<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> NodeNetworkConfigurationPolicy</span></span>
-<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> iscsi-worker-1</span><span class="kw">}</span></span>
-<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
-<span id="cb56-5"><a href="#cb56-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">nodeSelector</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">kubernetes.io/hostname</span><span class="kw">:</span><span class="at"> worker-1</span><span class="kw">}</span></span>
-<span id="cb56-6"><a href="#cb56-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">desiredState</span><span class="kw">:</span></span>
-<span id="cb56-7"><a href="#cb56-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">interfaces</span><span class="kw">:</span></span>
-<span id="cb56-8"><a href="#cb56-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> bond1.301</span></span>
-<span id="cb56-9"><a href="#cb56-9" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">type</span><span class="kw">:</span><span class="at"> vlan</span></span>
-<span id="cb56-10"><a href="#cb56-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">state</span><span class="kw">:</span><span class="at"> up</span></span>
-<span id="cb56-11"><a href="#cb56-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">mtu</span><span class="kw">:</span><span class="at"> </span><span class="dv">9000</span></span>
-<span id="cb56-12"><a href="#cb56-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vlan</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">base-iface</span><span class="kw">:</span><span class="at"> bond1</span><span class="kw">,</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> </span><span class="dv">301</span><span class="kw">}</span></span>
-<span id="cb56-13"><a href="#cb56-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">ipv4</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="kw">,</span><span class="at"> </span><span class="fu">dhcp</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span><span class="kw">,</span><span class="at"> </span><span class="fu">address</span><span class="kw">:</span><span class="at"> </span><span class="kw">[{</span><span class="fu">ip</span><span class="kw">:</span><span class="at"> </span><span class="fl">172.16.31.11</span><span class="kw">,</span><span class="at"> </span><span class="fu">prefix-length</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span><span class="kw">}]}</span></span>
-<span id="cb56-14"><a href="#cb56-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> bond1.302</span></span>
-<span id="cb56-15"><a href="#cb56-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">type</span><span class="kw">:</span><span class="at"> vlan</span></span>
-<span id="cb56-16"><a href="#cb56-16" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">state</span><span class="kw">:</span><span class="at"> up</span></span>
-<span id="cb56-17"><a href="#cb56-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">mtu</span><span class="kw">:</span><span class="at"> </span><span class="dv">9000</span></span>
-<span id="cb56-18"><a href="#cb56-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vlan</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">base-iface</span><span class="kw">:</span><span class="at"> bond1</span><span class="kw">,</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> </span><span class="dv">302</span><span class="kw">}</span></span>
-<span id="cb56-19"><a href="#cb56-19" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">ipv4</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="kw">,</span><span class="at"> </span><span class="fu">dhcp</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span><span class="kw">,</span><span class="at"> </span><span class="fu">address</span><span class="kw">:</span><span class="at"> </span><span class="kw">[{</span><span class="fu">ip</span><span class="kw">:</span><span class="at"> </span><span class="fl">172.16.32.11</span><span class="kw">,</span><span class="at"> </span><span class="fu">prefix-length</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span><span class="kw">}]}</span></span></code></pre></div>
+<div class="sourceCode" id="cb57"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> nmstate.io/v1</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> NodeNetworkConfigurationPolicy</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> iscsi-worker-1</span><span class="kw">}</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">nodeSelector</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">kubernetes.io/hostname</span><span class="kw">:</span><span class="at"> worker-1</span><span class="kw">}</span></span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">desiredState</span><span class="kw">:</span></span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">interfaces</span><span class="kw">:</span></span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> bond1.301</span></span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">type</span><span class="kw">:</span><span class="at"> vlan</span></span>
+<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">state</span><span class="kw">:</span><span class="at"> up</span></span>
+<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">mtu</span><span class="kw">:</span><span class="at"> </span><span class="dv">9000</span></span>
+<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vlan</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">base-iface</span><span class="kw">:</span><span class="at"> bond1</span><span class="kw">,</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> </span><span class="dv">301</span><span class="kw">}</span></span>
+<span id="cb57-13"><a href="#cb57-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">ipv4</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="kw">,</span><span class="at"> </span><span class="fu">dhcp</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span><span class="kw">,</span><span class="at"> </span><span class="fu">address</span><span class="kw">:</span><span class="at"> </span><span class="kw">[{</span><span class="fu">ip</span><span class="kw">:</span><span class="at"> </span><span class="fl">172.16.31.11</span><span class="kw">,</span><span class="at"> </span><span class="fu">prefix-length</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span><span class="kw">}]}</span></span>
+<span id="cb57-14"><a href="#cb57-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> bond1.302</span></span>
+<span id="cb57-15"><a href="#cb57-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">type</span><span class="kw">:</span><span class="at"> vlan</span></span>
+<span id="cb57-16"><a href="#cb57-16" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">state</span><span class="kw">:</span><span class="at"> up</span></span>
+<span id="cb57-17"><a href="#cb57-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">mtu</span><span class="kw">:</span><span class="at"> </span><span class="dv">9000</span></span>
+<span id="cb57-18"><a href="#cb57-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vlan</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">base-iface</span><span class="kw">:</span><span class="at"> bond1</span><span class="kw">,</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> </span><span class="dv">302</span><span class="kw">}</span></span>
+<span id="cb57-19"><a href="#cb57-19" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">ipv4</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="kw">,</span><span class="at"> </span><span class="fu">dhcp</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span><span class="kw">,</span><span class="at"> </span><span class="fu">address</span><span class="kw">:</span><span class="at"> </span><span class="kw">[{</span><span class="fu">ip</span><span class="kw">:</span><span class="at"> </span><span class="fl">172.16.32.11</span><span class="kw">,</span><span class="at"> </span><span class="fu">prefix-length</span><span class="kw">:</span><span class="at"> </span><span class="dv">24</span><span class="kw">}]}</span></span></code></pre></div>
 <p>Test from the node:
 <code>oc debug node/worker-1 -- chroot /host ping -M do -s 8972 &lt;array_iscsi_ip&gt;</code>
 proves jumbo frames work without fragmentation.</p>
 <p><strong>Step 3: StorageClass.</strong> Example for NetApp Trident on
 iSCSI:</p>
-<div class="sourceCode" id="cb57"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> iscsi-silver</span><span class="kw">}</span></span>
-<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
-<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
-<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-san</span></span>
-<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">sanType</span><span class="kw">:</span><span class="at"> iscsi</span></span>
-<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">fsType</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;&quot;</span></span>
-<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
-<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
+<div class="sourceCode" id="cb58"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> iscsi-silver</span><span class="kw">}</span></span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-san</span></span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">sanType</span><span class="kw">:</span><span class="at"> iscsi</span></span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">fsType</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;&quot;</span></span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
+<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
 <p><strong>Verify:</strong> <code>iscsiadm -m session</code> on a node
 (through <code>oc debug</code>) shows sessions to every array portal,
 and <code>multipath -ll</code> shows two or more paths per LUN.</p>
@@ -2975,17 +3046,17 @@ and <code>multipath -ll</code> shows two or more paths per LUN.</p>
 <p><strong>Concept.</strong> Nearly the lab setup, but with the vendor's
 CSI driver, export policies that allow the node subnet with root access
 for the driver, and NFS v4.1 (or the version the vendor recommends).</p>
-<div class="sourceCode" id="cb58"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
-<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
-<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> nfs-bronze</span><span class="kw">}</span></span>
-<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
-<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
-<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-nas</span></span>
-<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a><span class="fu">mountOptions</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">&quot;nfsvers=4.1&quot;</span><span class="kw">]</span></span>
-<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
-<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
+<div class="sourceCode" id="cb59"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> storage.k8s.io/v1</span></span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageClass</span></span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> nfs-bronze</span><span class="kw">}</span></span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a><span class="fu">provisioner</span><span class="kw">:</span><span class="at"> csi.trident.netapp.io</span></span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a><span class="fu">parameters</span><span class="kw">:</span></span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">backendType</span><span class="kw">:</span><span class="at"> ontap-nas</span></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a><span class="fu">mountOptions</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">&quot;nfsvers=4.1&quot;</span><span class="kw">]</span></span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a><span class="fu">allowVolumeExpansion</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a><span class="fu">reclaimPolicy</span><span class="kw">:</span><span class="at"> Delete</span></span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a><span class="fu">volumeBindingMode</span><span class="kw">:</span><span class="at"> Immediate</span></span></code></pre></div>
 <p><strong>Verify:</strong> the StorageProfile should show
 <code>ReadWriteMany</code> / <code>Filesystem</code>. Remember the
 filesystem overhead: a 100 GiB VMDK becomes a PVC of about 105.5 GiB on
@@ -2995,23 +3066,23 @@ changes in the StorageMap and the Plan</h3>
 <p>In VMware, each datastore sits on one array and one protocol. Map
 <strong>each datastore to the class on the same tier and
 protocol</strong>, so the application keeps its performance tier:</p>
-<div class="sourceCode" id="cb59"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> forklift.konveyor.io/v1beta1</span></span>
-<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageMap</span></span>
-<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> prod-vcenter-storage</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
-<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
-<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">provider</span><span class="kw">:</span></span>
-<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> &lt;PROD_VCENTER_PROVIDER&gt;</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
-<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> host</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
-<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">map</span><span class="kw">:</span></span>
-<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-01</span><span class="kw">}</span></span>
-<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
-<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-02</span><span class="kw">}</span></span>
-<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
-<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-ISCSI-SILVER-01</span><span class="kw">}</span></span>
-<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> iscsi-silver</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
-<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-NFS-BRONZE-01</span><span class="kw">}</span></span>
-<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> nfs-bronze</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Filesystem</span><span class="kw">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb60"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> forklift.konveyor.io/v1beta1</span></span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> StorageMap</span></span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> prod-vcenter-storage</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">provider</span><span class="kw">:</span></span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> &lt;PROD_VCENTER_PROVIDER&gt;</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> host</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span>
+<span id="cb60-8"><a href="#cb60-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">map</span><span class="kw">:</span></span>
+<span id="cb60-9"><a href="#cb60-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-01</span><span class="kw">}</span></span>
+<span id="cb60-10"><a href="#cb60-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
+<span id="cb60-11"><a href="#cb60-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-02</span><span class="kw">}</span></span>
+<span id="cb60-12"><a href="#cb60-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
+<span id="cb60-13"><a href="#cb60-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-ISCSI-SILVER-01</span><span class="kw">}</span></span>
+<span id="cb60-14"><a href="#cb60-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> iscsi-silver</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">}</span></span>
+<span id="cb60-15"><a href="#cb60-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-NFS-BRONZE-01</span><span class="kw">}</span></span>
+<span id="cb60-16"><a href="#cb60-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> nfs-bronze</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Filesystem</span><span class="kw">}</span></span></code></pre></div>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -3088,13 +3159,13 @@ FIELDS:
     enum: flashsystem, vantara, ontap, primera3par, ....</code></pre>
 <p>It is configured per StorageMap row with a secret holding the array
 credentials:</p>
-<div class="sourceCode" id="cb61"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-01</span><span class="kw">}</span></span>
-<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">}</span></span>
-<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">offloadPlugin</span><span class="kw">:</span></span>
-<span id="cb61-4"><a href="#cb61-4" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vsphereXcopyConfig</span><span class="kw">:</span></span>
-<span id="cb61-5"><a href="#cb61-5" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">secretRef</span><span class="kw">:</span><span class="at"> array-gold-credentials</span><span class="co">         # Secret in openshift-mtv, keys per vendor docs</span></span>
-<span id="cb61-6"><a href="#cb61-6" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">storageVendorProduct</span><span class="kw">:</span><span class="at"> ontap</span><span class="co">               # one of the enum values above</span></span></code></pre></div>
+<div class="sourceCode" id="cb62"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> DS-FC-GOLD-01</span><span class="kw">}</span></span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">destination</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">storageClass</span><span class="kw">:</span><span class="at"> fc-gold</span><span class="kw">,</span><span class="at"> </span><span class="fu">volumeMode</span><span class="kw">:</span><span class="at"> Block</span><span class="kw">,</span><span class="at"> </span><span class="fu">accessMode</span><span class="kw">:</span><span class="at"> ReadWriteMany</span><span class="kw">}</span></span>
+<span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">offloadPlugin</span><span class="kw">:</span></span>
+<span id="cb62-4"><a href="#cb62-4" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">vsphereXcopyConfig</span><span class="kw">:</span></span>
+<span id="cb62-5"><a href="#cb62-5" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">secretRef</span><span class="kw">:</span><span class="at"> array-gold-credentials</span><span class="co">         # Secret in openshift-mtv, keys per vendor docs</span></span>
+<span id="cb62-6"><a href="#cb62-6" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">storageVendorProduct</span><span class="kw">:</span><span class="at"> ontap</span><span class="co">               # one of the enum values above</span></span></code></pre></div>
 <p>Check the MTV documentation for your vendor's secret keys and
 supported protocols before using it. It can cut multi-terabyte copies
 from hours to minutes.</p>
@@ -3114,9 +3185,9 @@ networking for migration traffic</h3>
 create a dedicated <strong>transfer network</strong> (a NAD on a
 migration VLAN that can reach the ESXi management or NFC interfaces) and
 set it on the plan:</p>
-<div class="sourceCode" id="cb62"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
-<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">transferNetwork</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> migration-vlan-250</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb63"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">transferNetwork</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">name</span><span class="kw">:</span><span class="at"> migration-vlan-250</span><span class="kw">,</span><span class="at"> </span><span class="fu">namespace</span><span class="kw">:</span><span class="at"> openshift-mtv</span><span class="kw">}</span></span></code></pre></div>
 <p>This keeps bulk copy traffic off the cluster's default network and
 lets the network team give it its own QoS.</p>
 <h3 id="check-yourself-7">Check yourself</h3>
@@ -3418,15 +3489,15 @@ before reading the answer.</p>
 <p><strong>Q1. Create a project <code>vm-prod</code> and a NAD there
 that puts VMs on VLAN 120 through bridge <code>br-vm</code>.</strong>
 Answer:</p>
-<div class="sourceCode" id="cb63"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> new-project vm-prod</span>
-<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> <span class="op">&lt;&lt;&#39;Y&#39;</span> <span class="kw">|</span> <span class="ex">oc</span> apply <span class="at">-f</span> <span class="at">-</span></span>
-<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a><span class="st">apiVersion: k8s.cni.cncf.io/v1</span></span>
-<span id="cb63-4"><a href="#cb63-4" aria-hidden="true" tabindex="-1"></a><span class="st">kind: NetworkAttachmentDefinition</span></span>
-<span id="cb63-5"><a href="#cb63-5" aria-hidden="true" tabindex="-1"></a><span class="st">metadata: {name: vlan-120, namespace: vm-prod}</span></span>
-<span id="cb63-6"><a href="#cb63-6" aria-hidden="true" tabindex="-1"></a><span class="st">spec:</span></span>
-<span id="cb63-7"><a href="#cb63-7" aria-hidden="true" tabindex="-1"></a><span class="st">  config: &#39;{&quot;cniVersion&quot;:&quot;0.3.1&quot;,&quot;name&quot;:&quot;vlan-120&quot;,&quot;type&quot;:&quot;bridge&quot;,&quot;bridge&quot;:&quot;br-vm&quot;,&quot;vlan&quot;:120,&quot;macspoofchk&quot;:true,&quot;ipam&quot;:{}}&#39;</span></span>
-<span id="cb63-8"><a href="#cb63-8" aria-hidden="true" tabindex="-1"></a><span class="op">Y</span></span></code></pre></div>
+<div class="sourceCode" id="cb64"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> new-project vm-prod</span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> <span class="op">&lt;&lt;&#39;Y&#39;</span> <span class="kw">|</span> <span class="ex">oc</span> apply <span class="at">-f</span> <span class="at">-</span></span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a><span class="st">apiVersion: k8s.cni.cncf.io/v1</span></span>
+<span id="cb64-4"><a href="#cb64-4" aria-hidden="true" tabindex="-1"></a><span class="st">kind: NetworkAttachmentDefinition</span></span>
+<span id="cb64-5"><a href="#cb64-5" aria-hidden="true" tabindex="-1"></a><span class="st">metadata: {name: vlan-120, namespace: vm-prod}</span></span>
+<span id="cb64-6"><a href="#cb64-6" aria-hidden="true" tabindex="-1"></a><span class="st">spec:</span></span>
+<span id="cb64-7"><a href="#cb64-7" aria-hidden="true" tabindex="-1"></a><span class="st">  config: &#39;{&quot;cniVersion&quot;:&quot;0.3.1&quot;,&quot;name&quot;:&quot;vlan-120&quot;,&quot;type&quot;:&quot;bridge&quot;,&quot;bridge&quot;:&quot;br-vm&quot;,&quot;vlan&quot;:120,&quot;macspoofchk&quot;:true,&quot;ipam&quot;:{}}&#39;</span></span>
+<span id="cb64-8"><a href="#cb64-8" aria-hidden="true" tabindex="-1"></a><span class="op">Y</span></span></code></pre></div>
 <p>Logic: the bridge exists on every node (NNCP); the NAD only adds the
 VLAN tag and the name VMs refer to. A NAD in <code>vm-prod</code> is
 usable only by VMs in that project.</p>
@@ -3438,9 +3509,9 @@ automatically).</p>
 <p><strong>Q3. Make <code>nfs-csi</code> no longer the default
 StorageClass and make <code>fc-gold</code> the default for VMs
 only.</strong> Answer:</p>
-<div class="sourceCode" id="cb64"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> patch sc nfs-csi <span class="at">-p</span> <span class="st">&#39;{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;false&quot;}}}&#39;</span></span>
-<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> patch sc fc-gold <span class="at">-p</span> <span class="st">&#39;{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubevirt.io/is-default-virt-class&quot;:&quot;true&quot;}}}&#39;</span></span></code></pre></div>
+<div class="sourceCode" id="cb65"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> patch sc nfs-csi <span class="at">-p</span> <span class="st">&#39;{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;false&quot;}}}&#39;</span></span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a><span class="ex">oc</span> patch sc fc-gold <span class="at">-p</span> <span class="st">&#39;{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubevirt.io/is-default-virt-class&quot;:&quot;true&quot;}}}&#39;</span></span></code></pre></div>
 <p>Logic: OpenShift Virtualization prefers the
 <code>is-default-virt-class</code> class for VM disks, while pods keep
 using the cluster default.</p>

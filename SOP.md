@@ -1417,10 +1417,45 @@ oc apply -f test-ubuntu-migration.yaml            # = Start button
 | Initialize | 15:08:05 | 15:08:15 | 10 s |
 | DiskAllocation (10240 MB) | 15:08:15 | 15:08:21 | 6 s |
 | ImageConversion | 15:08:21 | 15:31:47 | 23 min 26 s |
-| DiskTransferV2v | 15:31:47 | running at time of writing (1740 of 10240 MB at 15:36) | |
-| VirtualMachineCreation | | | |
+| DiskTransferV2v (10240 MB) | 15:31:47 | 16:32:29 | 60 min 42 s |
+| VirtualMachineCreation | 16:32:29 | 16:32:30 | 1 s |
+| **Total** | **15:08:05** | **16:32:30** | **1 h 24 min 25 s** |
 
-**Lesson recorded:** without VDDK, virt-v2v reads the source disk over HTTPS through vCenter (`nbdkit curl`). For 10 GiB that is acceptable in a lab; for production disk sizes it is not. Section 12 is mandatory for production.
+The final state, captured as the plan finished:
+
+```console
+$ oc get plan test-ubuntu -n openshift-mtv
+NAME          READY   EXECUTING   SUCCEEDED   FAILED   AGE
+test-ubuntu   True                True                 124m
+
+$ oc get migration -n openshift-mtv
+NAME            READY   RUNNING   SUCCEEDED   FAILED   AGE
+test-ubuntu-1   True              True                 123m
+
+$ oc get plan test-ubuntu -n openshift-mtv -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.message}{"\n"}{end}'
+Ready      True   The migration plan is ready.
+Succeeded  True   The plan execution has SUCCEEDED.
+
+$ oc get vm,pvc -n mtv-test
+NAME                                                     AGE   STATUS    READY
+virtualmachine.kubevirt.io/ubuntu-noble-24.04-cloudimg   39m   Stopped   False
+
+NAME                                              STATUS   VOLUME                                     CAPACITY      ACCESS MODES   STORAGECLASS
+persistentvolumeclaim/test-ubuntu-vm-2275-dm9s9   Bound    pvc-e18f93ca-a91e-46e9-9306-2bda130b4efd   11381663335   RWX            nfs-csi
+```
+
+What MTV built from the vSphere VM (fields from `oc get vm ubuntu-noble-24.04-cloudimg -n mtv-test -o yaml`):
+
+| Field | Value | Comes from |
+|---|---|---|
+| `runStrategy` | `Halted` | `targetPowerState: auto` matches the source, which was powered off |
+| `cpu` | 2 sockets x 1 core | Source vCPU layout |
+| `memory.guest` | `1Gi` | Source RAM |
+| `firmware` | BIOS | Source firmware |
+| `networks` | `multus: default/vlan-110` | NetworkMap |
+| `volumes` | PVC `test-ubuntu-vm-2275-dm9s9` | StorageMap (`nfs-csi`); the PVC is slightly larger than 10 GiB to leave room for filesystem overhead |
+
+**Lesson recorded:** without VDDK, virt-v2v reads the source disk over HTTPS through vCenter (`nbdkit curl`). Here that came to about 2.8 MB/s: one hour to copy 10 GiB, plus 23 minutes of conversion. At that rate a 500 GiB production disk would take more than two days, so section 12 (VDDK) is mandatory for production.
 
 ### 16.3 After it finishes
 
