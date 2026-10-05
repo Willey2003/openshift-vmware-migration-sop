@@ -1,0 +1,69 @@
+<title>$pagetitle$</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;700&family=Red+Hat+Text:ital,wght@0,400;0,500;0,700;1,400&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: change-controlled SOP. Sticky contents rail on wide screens, single reading column, terminal-style output blocks. */
+:root{
+  --bg:#f6f7f9; --paper:#ffffff; --fg:#1b2129; --muted:#5b6673; --line:#d9dee5;
+  --accent:#1d5b86; --accent-soft:#e6eff6;
+  --code-bg:#0f1720; --code-fg:#dbe4ee;
+  --prod-bg:#fff5e1; --prod-line:#c98a12; --shot-bg:#f1f4f8; --shot-line:#8a96a5;
+  --f-display:"Red Hat Display",system-ui,sans-serif;
+  --f-body:"Red Hat Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"Red Hat Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1318; --paper:#151b22; --fg:#e3e8ee; --muted:#9aa6b4; --line:#2a333e;
+  --accent:#7fb6e0; --accent-soft:#1a2a38; --code-bg:#0a0e13; --code-fg:#d6e0ea;
+  --prod-bg:#2a2210; --prod-line:#d9a23a; --shot-bg:#1a212a; --shot-line:#6c7888; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1318; --paper:#151b22; --fg:#e3e8ee; --muted:#9aa6b4; --line:#2a333e;
+  --accent:#7fb6e0; --accent-soft:#1a2a38; --code-bg:#0a0e13; --code-fg:#d6e0ea;
+  --prod-bg:#2a2210; --prod-line:#d9a23a; --shot-bg:#1a212a; --shot-line:#6c7888; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.65 var(--f-body);padding-inline:16px;padding-block:0}
+.wrap{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:270px minmax(0,1fr);gap:40px;padding-block:32px 80px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);align-self:start;max-height:calc(100vh - 32px);overflow:auto;font-size:13.5px;padding-right:8px}
+nav.toc .label{font:700 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+nav.toc ul{list-style:none;margin:0;padding:0}
+nav.toc ul ul{padding-left:12px;border-left:1px solid var(--line);margin:4px 0 8px}
+nav.toc a{color:var(--fg);text-decoration:none;display:block;padding:3px 0}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--accent)}
+nav.toc>ul>li>a{font-weight:700;margin-top:6px}
+main{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:40px clamp(18px,4vw,56px)}
+header.doc{border-bottom:2px solid var(--fg);padding-bottom:20px;margin-bottom:28px}
+header.doc .id{font:500 12px/1 var(--f-mono);letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+header.doc h1.title{font:700 clamp(26px,3.6vw,38px)/1.15 var(--f-display);margin:10px 0 8px;text-wrap:balance}
+header.doc .sub{color:var(--muted);margin:0}
+h1,h2,h3,h4{font-family:var(--f-display);line-height:1.25;text-wrap:balance;scroll-margin-top:16px}
+main h1{font-size:28px;margin:56px 0 14px;padding-top:20px;border-top:1px solid var(--line)}
+main h2{font-size:21px;margin:40px 0 10px}
+main h3{font-size:17px;margin:28px 0 8px}
+p,li{max-width:76ch}
+a{color:var(--accent)}
+code{font-family:var(--f-mono);font-size:.9em;background:var(--accent-soft);padding:1px 5px;border-radius:3px}
+pre{background:var(--code-bg);color:var(--code-fg);padding:14px 16px;border-radius:5px;overflow-x:auto;font:13px/1.5 var(--f-mono);margin:14px 0}
+pre code{background:none;padding:0;color:inherit;font-size:inherit}
+.table-wrap{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft);font-weight:700}
+blockquote{margin:16px 0;padding:12px 16px;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 4px 4px 0}
+blockquote p{margin:6px 0}
+blockquote.prod{border-left-color:var(--prod-line);background:var(--prod-bg)}
+blockquote.shot{border:1.5px dashed var(--shot-line);background:var(--shot-bg);border-radius:4px;font-size:14.5px}
+blockquote.shot strong:first-child{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.04em}
+img{max-width:100%;border:1px solid var(--line);border-radius:4px}
+hr{border:0;border-top:1px solid var(--line);margin:32px 0}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}nav.toc{position:static;max-height:none;border:1px solid var(--line);border-radius:6px;padding:16px;background:var(--paper)}}
+</style>
+<div class="wrap">
+<nav class="toc" aria-label="Contents"><p class="label">Contents</p>
+$toc$
+</nav>
+<main>
+<header class="doc"><div class="id">$docid$ · v1.0 · $date$</div>
+<h1 class="title">$title$</h1><p class="sub">$subtitle$ · $author$</p></header>
+$body$
+</main>
+</div>

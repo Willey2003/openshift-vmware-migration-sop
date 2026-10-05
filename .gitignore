@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.artifact.html
+.DS_Store
+Thumbs.db
+~$*.docx
