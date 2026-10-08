@@ -4,8 +4,7 @@
 
 An open-source standard operating procedure for moving virtual machines from VMware vSphere to Red Hat OpenShift Virtualization with the Migration Toolkit for Virtualization (MTV). It is written for VMware engineers who are new to Linux and Kubernetes. Every step has a web console path and an `oc` path. The command output comes from a real lab build, with hostnames and IP addresses replaced by placeholders.
 
-<!-- Featured on LinkedIn: add the post link here once it is live -->
-> **Featured on LinkedIn:** [read the launch post](#) and join the discussion.
+<!-- Featured on LinkedIn: add "> **Featured on LinkedIn:** [read the launch post](URL) and join the discussion." here once the post is live -->
 
 ## Architecture
 
