@@ -7,6 +7,12 @@ An open-source standard operating procedure for moving virtual machines from VMw
 <!-- Featured on LinkedIn: add the post link here once it is live -->
 > **Featured on LinkedIn:** [read the launch post](#) and join the discussion.
 
+## Architecture
+
+![Migration architecture: vSphere, MTV, OpenShift Virtualization, storage and networking](assets/migration-architecture.drawio.png)
+
+The diagram is editable: open [`assets/migration-architecture.drawio`](assets/migration-architecture.drawio) (or the PNG, which carries the diagram inside it) in [draw.io / diagrams.net](https://app.diagrams.net).
+
 ## What is in this repository
 
 | Document | What it is | Read it |
@@ -67,7 +73,7 @@ The worked example is a cold migration of one 10 GiB Ubuntu VM without VDDK. You
 | `src/*.md` | Master copy of the SOP |
 | `quickstart-src/*.md` | Master copy of the quick start |
 | `build.py`, `template.html` | Build and page layout for the SOP and quick start |
-| `assets/` | The pipeline diagram (PNG and SVG) and the cheat-sheet PDF |
+| `assets/` | The pipeline diagram (PNG and SVG), the editable draw.io architecture diagram and the cheat-sheet PDF |
 | `images/`, `lab-manual/images/` | Screenshots. Save a capture as `S-nn.png` and the build places it in its placeholder. |
 
 ## Rebuild
